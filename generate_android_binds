@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configs
+
+LIB_NAME="libwarpinator"
+CRATE_NAME="warpinator-ffi"
+BINDGEN_BIN="bindgen"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+OUT_DIR="${SCRIPT_DIR}/out/android"
+BINDINGS_DIR="${SCRIPT_DIR}/bindgen"
+JNI_LIBS_DIR="${OUT_DIR}/jniLibs"
+
+ANDROID_TARGETS=(
+  "aarch64-linux-android:arm64-v8a"
+  "armv7-linux-androideabi:armeabi-v7a"
+  "x86_64-linux-android:x86_64"
+  "i686-linux-android:x86"
+)
+
+PROFILE="${PROFILE:-release}"
+CARGO_FLAGS=""
+if [ "$PROFILE" = "release" ]; then
+  CARGO_FLAGS="--release"
+fi
+
+# Some checks
+
+if ! command -v cargo-ndk &>/dev/null; then
+  echo "x cargo-ndk not found. Install it with: cargo install cargo-ndk"
+  exit 1
+fi
+
+if ! command -v cargo &>/dev/null; then
+  echo "x cargo not found. Install Rust"
+  exit 1
+fi
+
+# Building
+
+echo "Building ${CRATE_NAME} for Android targets (profile: ${PROFILE})..."
+
+for entry in "${ANDROID_TARGETS[@]}"; do
+  RUST_TARGET="${entry%%:*}"
+  ABI="${entry##*:}"
+
+  echo "  → ${RUST_TARGET} (${ABI})"
+
+  cargo ndk \
+    --target "${RUST_TARGET}" \
+    build ${CARGO_FLAGS} 2>&1 | sed 's/^/     /'
+
+  SO_SRC="${SCRIPT_DIR}/target/${RUST_TARGET}/${PROFILE}/${LIB_NAME}.so"
+  SO_DEST="${JNI_LIBS_DIR}/${ABI}/${LIB_NAME}.so"
+
+  mkdir -p "${JNI_LIBS_DIR}/${ABI}"
+  cp "${SO_SRC}" "${SO_DEST}"
+  echo "  ✓ Copied ${LIB_NAME}.so → jniLibs/${ABI}/"
+done
+
+echo ""
+echo "Generating Kotlin bindings..."
+
+mkdir -p "${BINDINGS_DIR}"
+
+# Use the already-built library from one of the targets to extract metadata
+REFERENCE_LIB="${JNI_LIBS_DIR}/arm64-v8a/${LIB_NAME}.so"
+
+cargo run \
+  --features=uniffi/cli \
+  --bin "${BINDGEN_BIN}" \
+  ${CARGO_FLAGS} \
+  -- generate \
+  --config "${SCRIPT_DIR}/uniffi-android.toml" \
+  --library "${REFERENCE_LIB}" \
+  --language kotlin \
+  --out-dir "${BINDINGS_DIR}" 2>&1 | sed 's/^/  /'
+
+echo "  ✓ Bindings written to bindgen/"
+echo ""
+echo "Done!"
