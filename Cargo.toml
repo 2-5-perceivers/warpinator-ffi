@@ -11,6 +11,10 @@ name = "warpinator"
 name = "bindgen"
 path = "bin/bindgen.rs"
 
+[[bin]]
+name = "build-android"
+path = "bin/build_android.rs"
+
 [profile.release]
 opt-level = "s"
 panic = "abort"
