@@ -1,4 +1,6 @@
 pub mod config;
+#[cfg(feature = "power_manager")]
+pub mod power_manager;
 pub mod types;
 
 use crate::config::{ProtocolConfig, UserConfig};
@@ -46,7 +48,8 @@ pub trait WarpEventListener: Send + Sync {
     fn on_message_removed(&self, remote_uuid: String, message_uuid: String);
 }
 
-#[uniffi::export(async_runtime = "tokio")]
+#[cfg(not(feature = "power_manager"))]
+#[uniffi::export]
 impl Warpinator {
     #[uniffi::constructor]
     pub fn new(
@@ -64,6 +67,7 @@ impl Warpinator {
         if let Some(protocol_config) = protocol_config {
             server_builder = server_builder.protocol_config(protocol_config);
         }
+
         let server = server_builder
             .service_name(service_name.as_str())
             .build()
@@ -78,7 +82,50 @@ impl Warpinator {
             runtime,
         }))
     }
+}
 
+#[cfg(feature = "power_manager")]
+#[uniffi::export]
+impl Warpinator {
+    #[uniffi::constructor]
+    pub fn new(
+        config: UserConfig,
+        protocol_config: Option<ProtocolConfig>,
+        service_name: String,
+        power_manager: Box<dyn power_manager::PowerManager>,
+    ) -> Result<Arc<Self>> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|_| WarpError::RuntimeError)?;
+        let user_config = config.to_config()?;
+        let protocol_config = protocol_config.map(|c| c.to_config());
+
+        let mut server_builder =
+            warpinator_lib::WarpinatorServer::builder().user_config(user_config);
+
+        if let Some(protocol_config) = protocol_config {
+            server_builder = server_builder.protocol_config(protocol_config);
+        }
+        server_builder = server_builder.power_manager(Arc::new(
+            power_manager::PowerManagerWrapper::new(power_manager),
+        ));
+
+        let server = server_builder
+            .service_name(service_name.as_str())
+            .build()
+            .map_err(|e| WarpError::BuildServerError(e.to_string()))?;
+
+        let remote_manager = server.remotes.clone();
+
+        Ok(Arc::new(Self {
+            server: Mutex::new(Some(server)),
+            remote_manager: RwLock::new(Some(remote_manager)),
+            shutdown_tx: Mutex::new(None),
+            runtime,
+        }))
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl Warpinator {
     pub fn start(&self, listener: Box<dyn WarpEventListener>) -> Result<()> {
         let server = self
             .server

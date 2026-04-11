@@ -31,3 +31,4 @@ uniffi = { version = "0.31.0", features = ["build"] }
 [features]
 default = ["messaging"]
 messaging = ["warpinator-lib/messaging"]
+power_manager = ["warpinator-lib/power_manager"]
