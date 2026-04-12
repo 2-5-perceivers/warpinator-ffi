@@ -52,6 +52,7 @@ pub struct Remote {
     pub username: String,
     pub hostname: String,
     pub picture: Option<Vec<u8>>,
+    pub picture_version: u8,
 
     pub state: RemoteState,
 
@@ -70,7 +71,8 @@ impl From<&warpinator_lib::types::remote::Remote> for Remote {
             display_name: value.display_name.clone(),
             username: value.username.clone(),
             hostname: value.hostname.clone(),
-            picture: value.picture.clone(),
+            picture: value.picture.as_ref().map(|p| (**p).to_vec()),
+            picture_version: value.picture_version,
             state: value.state.clone().into(),
             service_static: value.service_static,
             service_available: value.service_available,
