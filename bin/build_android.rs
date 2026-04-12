@@ -7,7 +7,11 @@ const CRATE_NAME: &str = "warpinator-ffi";
 const BINDGEN_BIN: &str = "bindgen";
 
 const TARGETS: &[&str] = &["armeabi-v7a", "arm64-v8a", "x86", "x86_64"];
-const FEATURES: &[&str] = &["power_manager"];
+const FEATURES: &[&str] = &[
+    "power_manager",
+    "tracing_android",
+    "tracing_release_max_level_debug",
+];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let script_dir = env::var("CARGO_MANIFEST_DIR")

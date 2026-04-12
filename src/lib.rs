@@ -1,6 +1,8 @@
 pub mod config;
 #[cfg(feature = "power_manager")]
 pub mod power_manager;
+#[cfg(any(feature = "tracing_callbacks", feature = "tracing_android"))]
+pub mod tracing;
 pub mod types;
 
 use crate::config::{ProtocolConfig, UserConfig};
