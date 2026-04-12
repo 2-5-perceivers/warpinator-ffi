@@ -37,6 +37,28 @@ pub enum WarpError {
     NotFound,
 }
 
+#[derive(uniffi::Error, thiserror::Error, Debug)]
+pub enum ManualConnectionError {
+    #[error("Invalid URL")]
+    InvalidUrl,
+    #[error("Failed to register with remote")]
+    FailedToRegister,
+    #[error("Remote is unavailable")]
+    Unavailable,
+    #[error("Remote had an internal error")]
+    RemoteInternal,
+    #[error("Remote does not support manual connections")]
+    RemoteUnimplemented,
+    #[error("Connecting already in progress")]
+    AlreadyConnecting,
+    #[error("Already connected")]
+    AlreadyConnected,
+    #[error("Failed to connect: {0}")]
+    FailedToConnect(String),
+    #[error(transparent)]
+    RuntimeError(#[from] WarpError),
+}
+
 type Result<T> = std::result::Result<T, WarpError>;
 
 #[uniffi::export(callback_interface)]
@@ -184,11 +206,39 @@ impl Warpinator {
         self.remote_manager.write().unwrap().take();
     }
 
-    pub async fn manual_connection(&self, url: &str) -> Result<()> {
+    pub async fn manual_connection(
+        &self,
+        url: &str,
+    ) -> std::result::Result<(), ManualConnectionError> {
         self.manager()?
             .manual_connection(url)
             .await
-            .map_err(|_| WarpError::RuntimeError)
+            .map_err(|e| match e {
+                warpinator_lib::remote_manager::ManualConnectionError::InvalidUrl => {
+                    ManualConnectionError::InvalidUrl
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::FailedToRegister => {
+                    ManualConnectionError::FailedToRegister
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::Unavailable => {
+                    ManualConnectionError::Unavailable
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::RemoteInternal => {
+                    ManualConnectionError::RemoteInternal
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::RemoteUnimplemented => {
+                    ManualConnectionError::RemoteUnimplemented
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::AlreadyConnecting => {
+                    ManualConnectionError::AlreadyConnecting
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::AlreadyConnected => {
+                    ManualConnectionError::AlreadyConnected
+                }
+                warpinator_lib::remote_manager::ManualConnectionError::FailedToConnect(e) => {
+                    ManualConnectionError::FailedToConnect(e.to_string())
+                }
+            })
     }
 
     pub async fn remove_transfer(&self, remote_uuid: &str, transfer_uuid: &str) -> Result<()> {
