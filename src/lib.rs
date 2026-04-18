@@ -1,4 +1,5 @@
 pub mod config;
+pub mod filesystem;
 #[cfg(feature = "power_manager")]
 pub mod power_manager;
 #[cfg(any(feature = "tracing_callbacks", feature = "tracing_android"))]
@@ -9,8 +10,10 @@ use crate::config::{ProtocolConfig, UserConfig};
 use crate::types::message::Message;
 use crate::types::remote::Remote;
 use crate::types::transfer::Transfer;
+use ::tracing as tracing_crate;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
+use tokio::sync::broadcast::error::RecvError;
 use warpinator_lib::remote_manager::WarpEvent;
 
 uniffi::setup_scaffolding!("warpinator");
@@ -62,14 +65,15 @@ pub enum ManualConnectionError {
 type Result<T> = std::result::Result<T, WarpError>;
 
 #[uniffi::export(callback_interface)]
+#[async_trait::async_trait]
 pub trait WarpEventListener: Send + Sync {
-    fn on_remote_added(&self, uuid: String);
-    fn on_remote_updated(&self, uuid: String);
-    fn on_transfer_added(&self, remote_uuid: String, transfer_uuid: String);
-    fn on_transfer_updated(&self, remote_uuid: String, transfer_uuid: String);
-    fn on_transfer_removed(&self, remote_uuid: String, transfer_uuid: String);
-    fn on_message_added(&self, remote_uuid: String, message_uuid: String);
-    fn on_message_removed(&self, remote_uuid: String, message_uuid: String);
+    async fn on_remote_added(&self, uuid: String);
+    async fn on_remote_updated(&self, uuid: String);
+    async fn on_transfer_added(&self, remote_uuid: String, transfer_uuid: String);
+    async fn on_transfer_updated(&self, remote_uuid: String, transfer_uuid: String);
+    async fn on_transfer_removed(&self, remote_uuid: String, transfer_uuid: String);
+    async fn on_message_added(&self, remote_uuid: String, message_uuid: String);
+    async fn on_message_removed(&self, remote_uuid: String, message_uuid: String);
 }
 
 #[cfg(not(feature = "power_manager"))]
@@ -171,18 +175,35 @@ impl Warpinator {
 
         self.runtime.spawn(async move {
             let mut events = remote_manager.subscribe();
-            while let Ok(event) = events.recv().await {
-                match event {
-                    WarpEvent::RemoteAdded(uuid) => listener.on_remote_added(uuid),
-                    WarpEvent::RemoteUpdated(uuid) => listener.on_remote_updated(uuid),
-                    WarpEvent::TransferAdded(r, t) => listener.on_transfer_added(r, t),
-                    WarpEvent::TransferUpdated(r, t) => listener.on_transfer_updated(r, t),
-                    WarpEvent::TransferRemoved(r, t) => listener.on_transfer_removed(r, t),
-                    #[cfg(feature = "messaging")]
-                    WarpEvent::MessageAdded(r, m) => listener.on_message_added(r, m),
-                    #[cfg(feature = "messaging")]
-                    WarpEvent::MessageRemoved(r, m) => listener.on_message_removed(r, m),
-                    _ => {}
+            loop {
+                match events.recv().await {
+                    Ok(event) => match event {
+                        WarpEvent::RemoteAdded(uuid) => listener.on_remote_added(uuid).await,
+                        WarpEvent::RemoteUpdated(uuid) => listener.on_remote_updated(uuid).await,
+                        WarpEvent::TransferAdded(r, t) => listener.on_transfer_added(r, t).await,
+                        WarpEvent::TransferUpdated(r, t) => {
+                            listener.on_transfer_updated(r, t).await
+                        }
+                        WarpEvent::TransferRemoved(r, t) => {
+                            listener.on_transfer_removed(r, t).await
+                        }
+                        #[cfg(feature = "messaging")]
+                        WarpEvent::MessageAdded(r, m) => listener.on_message_added(r, m).await,
+                        #[cfg(feature = "messaging")]
+                        WarpEvent::MessageRemoved(r, m) => listener.on_message_removed(r, m).await,
+                        _ => {}
+                    },
+                    Err(RecvError::Lagged(missed_count)) => {
+                        tracing_crate::debug!(
+                            "Receiver lagged behind and missed {} events. Catching up...",
+                            missed_count
+                        );
+                        continue;
+                    }
+                    Err(RecvError::Closed) => {
+                        tracing_crate::debug!("Event channel closed, shutting down receiver loop.");
+                        break; // This is the only time you should exit the loop
+                    }
                 }
             }
         });

@@ -8,6 +8,7 @@ const BINDGEN_BIN: &str = "bindgen";
 
 const TARGETS: &[&str] = &["armeabi-v7a", "arm64-v8a", "x86", "x86_64"];
 const FEATURES: &[&str] = &[
+    "virtual_filesystem",
     "power_manager",
     "tracing_android",
     "tracing_release_max_level_debug",
@@ -60,11 +61,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bindgen_cmd = Command::new("cargo");
     bindgen_cmd
         .arg("run")
-        .arg("--features=uniffi/cli")
+        .args(&cargo_flags)
         .arg("--bin")
         .arg(BINDGEN_BIN)
-        .args(&cargo_flags) // Notice: flags are applied to the build step of the bindgen binary too
-        .arg("--")
         .arg("generate")
         .arg("--config")
         .arg(&uniffi_config)
@@ -76,6 +75,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(&bindings_dir)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    // Print out the command used
+    println!(
+        "({})",
+        bindgen_cmd
+            .get_args()
+            .map(|s| s.to_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
 
     let status = bindgen_cmd.status()?;
     if !status.success() {

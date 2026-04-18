@@ -2599,6 +2599,7 @@ dependencies = [
 name = "warpinator-ffi"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "thiserror",
  "tokio",
  "tracing",
@@ -2611,8 +2612,9 @@ dependencies = [
 [[package]]
 name = "warpinator-lib"
 version = "0.1.0"
-source = "git+https://github.com/2-5-perceivers/warpinator-lib.git#9dd2c6573fa135fbb1778222f6e2708d20b9ca9f"
+source = "git+https://github.com/2-5-perceivers/warpinator-lib.git#13d7d7690d0b13a2d267e1ea099b1b1ef34feaee"
 dependencies = [
+ "async-trait",
  "async-walkdir",
  "base64",
  "bitflags",

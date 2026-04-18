@@ -47,6 +47,7 @@ pub struct Remote {
     pub port: u16,
     pub auth_port: u16,
     pub service_name: String,
+    pub features: u32,
 
     pub display_name: String,
     pub username: String,
@@ -68,6 +69,7 @@ impl From<&warpinator_lib::types::remote::Remote> for Remote {
             port: value.port,
             auth_port: value.auth_port,
             service_name: value.service_name.clone(),
+            features: value.features.bits(),
             display_name: value.display_name.clone(),
             username: value.username.clone(),
             hostname: value.hostname.clone(),

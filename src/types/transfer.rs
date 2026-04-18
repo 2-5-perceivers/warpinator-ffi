@@ -12,6 +12,8 @@ pub enum TransferError {
     OutOfMemory,
     IoError,
     RemoteError,
+    #[cfg(feature = "virtual_filesystem")]
+    VirtualFilesystemError,
 }
 
 #[derive(uniffi::Enum)]
@@ -147,6 +149,10 @@ impl From<&warpinator_lib::types::transfer::TransferState> for TransferState {
                 }
                 warpinator_lib::types::transfer::TransferError::RemoteError => {
                     TransferError::RemoteError
+                }
+                #[cfg(feature = "virtual_filesystem")]
+                warpinator_lib::types::transfer::TransferError::VirtualFilesystemError(_) => {
+                    TransferError::VirtualFilesystemError
                 }
             }),
         }
