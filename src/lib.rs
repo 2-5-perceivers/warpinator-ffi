@@ -7,6 +7,7 @@ pub mod tracing;
 pub mod types;
 
 use crate::config::{ProtocolConfig, UserConfig};
+#[cfg(feature = "messaging")]
 use crate::types::message::Message;
 use crate::types::remote::Remote;
 use crate::types::transfer::Transfer;
@@ -269,14 +270,6 @@ impl Warpinator {
             .map_err(|_| WarpError::RuntimeError)
     }
 
-    #[cfg(feature = "messaging")]
-    pub async fn remove_message(&self, remote_uuid: &str, message_uuid: &str) -> Result<()> {
-        self.manager()?
-            .remove_message(remote_uuid, message_uuid)
-            .await
-            .map_err(|_| WarpError::RuntimeError)
-    }
-
     pub async fn connect_remote(&self, uuid: &str) -> Result<()> {
         self.manager()?
             .get_worker(uuid)
@@ -294,17 +287,6 @@ impl Warpinator {
             .await
             .ok_or(WarpError::RuntimeError)?
             .send_transfer_request(paths)
-            .await
-            .map_err(|_| WarpError::RuntimeError)
-    }
-
-    #[cfg(feature = "messaging")]
-    pub async fn send_message(&self, remote_uuid: &str, content: String) -> Result<()> {
-        self.manager()?
-            .get_worker(remote_uuid)
-            .await
-            .ok_or(WarpError::RuntimeError)?
-            .send_message(content.as_str())
             .await
             .map_err(|_| WarpError::RuntimeError)
     }
@@ -349,6 +331,19 @@ impl Warpinator {
             .map_err(|_| WarpError::RuntimeError)
     }
 
+    pub async fn remote_picture(&self, uuid: &str) -> Result<Vec<u8>> {
+        Ok(self
+            .manager()?
+            .remote(uuid)
+            .await
+            .ok_or(WarpError::NotFound)?
+            .picture
+            .ok_or(WarpError::NotFound)?
+            .read()
+            .await
+            .clone())
+    }
+
     pub async fn remote(&self, uuid: &str) -> Result<Remote> {
         self.manager()?
             .remote(uuid)
@@ -385,8 +380,21 @@ impl Warpinator {
             .map(Transfer::from)
             .collect())
     }
+}
 
-    #[cfg(feature = "messaging")]
+#[cfg(feature = "messaging")]
+#[uniffi::export(async_runtime = "tokio")]
+impl Warpinator {
+    pub async fn send_message(&self, remote_uuid: &str, content: String) -> Result<()> {
+        self.manager()?
+            .get_worker(remote_uuid)
+            .await
+            .ok_or(WarpError::RuntimeError)?
+            .send_message(content.as_str())
+            .await
+            .map_err(|_| WarpError::RuntimeError)
+    }
+
     pub async fn message(&self, remote_uuid: &str, message_uuid: &str) -> Result<Message> {
         self.manager()?
             .message(remote_uuid, message_uuid)
@@ -395,7 +403,6 @@ impl Warpinator {
             .map(|m| Message::from(&m))
     }
 
-    #[cfg(feature = "messaging")]
     pub async fn messages(&self, remote_uuid: &str) -> Result<Vec<Message>> {
         Ok(self
             .manager()?
@@ -405,6 +412,13 @@ impl Warpinator {
             .iter()
             .map(Message::from)
             .collect())
+    }
+
+    pub async fn remove_message(&self, remote_uuid: &str, message_uuid: &str) -> Result<()> {
+        self.manager()?
+            .remove_message(remote_uuid, message_uuid)
+            .await
+            .map_err(|_| WarpError::RuntimeError)
     }
 }
 

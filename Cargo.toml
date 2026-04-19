@@ -37,7 +37,7 @@ async-trait = "0.1.89"
 uniffi = { version = "0.31.0", features = ["build"] }
 
 [features]
-default = ["messaging", "power_manager", "virtual_filesystem"]
+default = ["messaging", "power_manager"]
 messaging = ["warpinator-lib/messaging"]
 power_manager = ["warpinator-lib/power_manager"]
 real_filesystem = ["warpinator-lib/real_filesystem"]
